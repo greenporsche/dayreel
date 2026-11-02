@@ -136,7 +136,7 @@ final class SettingsWindow: NSObject {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 360),
                           styleMask: [.titled, .closable], backing: .buffered, defer: false)
         super.init()
-        window.title = "InstantShot Settings"
+        window.title = "Dayreel Settings"
         window.isReleasedWhenClosed = false
         window.contentViewController = NSHostingController(rootView: SettingsView(m: model))
         window.setContentSize(NSSize(width: 480, height: 360))
@@ -180,14 +180,14 @@ final class App: NSObject, NSApplicationDelegate {
         let appItem = NSMenuItem(); appItem.submenu = appMenu; main.addItem(appItem)
         let s1 = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ","); s1.target = self
         appMenu.addItem(s1)
-        appMenu.addItem(NSMenuItem(title: "Quit InstantShot", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        appMenu.addItem(NSMenuItem(title: "Quit Dayreel", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         NSApp.mainMenu = main
         let prefs = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
-        let quit = NSMenuItem(title: "Quit InstantShot", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let quit = NSMenuItem(title: "Quit Dayreel", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         [toggleItem, .separator(), revealItem, prefs, .separator(), quit].forEach { menu.addItem($0) }
         [toggleItem, revealItem, prefs].forEach { $0.target = self }
         item.menu = menu
-        item.button?.setAccessibilityLabel("InstantShot")
+        item.button?.setAccessibilityLabel("Dayreel")
         settings.onChange = { [weak self] in self?.settingsChanged() }
         refresh()
         // Once a save folder is set up, launching the app starts capturing right away.
@@ -220,7 +220,7 @@ final class App: NSObject, NSApplicationDelegate {
         } else { detail = "Stopped" }
         Self.setSubtitle(toggleItem, captureNote)
         Self.setSubtitle(revealItem, Prefs.folder?.lastPathComponent)
-        item.button?.toolTip = "InstantShot — " + detail
+        item.button?.toolTip = "Dayreel — " + detail
         item.button?.setAccessibilityValue(detail)
     }
 
@@ -252,7 +252,7 @@ final class App: NSObject, NSApplicationDelegate {
         if Prefs.folder != nil { return true }
         NSApp.activate(ignoringOtherApps: true)
         let p = NSOpenPanel()
-        p.message = "Choose where InstantShot saves screenshots"
+        p.message = "Choose where Dayreel saves screenshots"
         p.canChooseDirectories = true; p.canChooseFiles = false; p.canCreateDirectories = true
         if p.runModal() == .OK { Prefs.folder = p.url }
         return Prefs.folder != nil
@@ -294,13 +294,13 @@ final class App: NSObject, NSApplicationDelegate {
         guard let ctx = CGContext(data: nil, width: Int(l.size.width), height: Int(l.size.height), bitsPerComponent: 8,
                                   bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
                                   bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else {
-            throw NSError(domain: "InstantShot", code: 4, userInfo: [NSLocalizedDescriptionKey: "Couldn't combine displays"])
+            throw NSError(domain: "Dayreel", code: 4, userInfo: [NSLocalizedDescriptionKey: "Couldn't combine displays"])
         }
         ctx.setFillColor(CGColor(gray: 0, alpha: 1)); ctx.fill(CGRect(origin: .zero, size: l.size))
         ctx.interpolationQuality = .high
         for (shot, r) in zip(shots, l.rects) { ctx.draw(shot.image, in: r) }
         guard let out = ctx.makeImage() else {
-            throw NSError(domain: "InstantShot", code: 4, userInfo: [NSLocalizedDescriptionKey: "Couldn't combine displays"])
+            throw NSError(domain: "Dayreel", code: 4, userInfo: [NSLocalizedDescriptionKey: "Couldn't combine displays"])
         }
         return out
     }
@@ -325,7 +325,7 @@ final class App: NSObject, NSApplicationDelegate {
                     let main = CGMainDisplayID()
                     displays = displays.filter { $0.displayID == main }
                 }
-                guard !displays.isEmpty else { throw NSError(domain: "InstantShot", code: 1, userInfo: [NSLocalizedDescriptionKey: "No display found"]) }
+                guard !displays.isEmpty else { throw NSError(domain: "Dayreel", code: 1, userInfo: [NSLocalizedDescriptionKey: "No display found"]) }
                 let now = Date()
                 let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX")
                 f.dateFormat = "yyMMdd"; let day = f.string(from: now)
@@ -347,11 +347,11 @@ final class App: NSObject, NSApplicationDelegate {
                 let final = shots.count == 1 ? shots[0].image : try Self.stitch(shots)
                 let url = dir.appendingPathComponent("\(day)-\(time).jpg")
                 guard let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.jpeg.identifier as CFString, 1, nil) else {
-                    throw NSError(domain: "InstantShot", code: 2, userInfo: [NSLocalizedDescriptionKey: "Can't write to the save folder"])
+                    throw NSError(domain: "Dayreel", code: 2, userInfo: [NSLocalizedDescriptionKey: "Can't write to the save folder"])
                 }
                 CGImageDestinationAddImage(dest, final, [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
                 guard CGImageDestinationFinalize(dest) else {
-                    throw NSError(domain: "InstantShot", code: 3, userInfo: [NSLocalizedDescriptionKey: "Couldn't save a screenshot. Check the save folder."])
+                    throw NSError(domain: "Dayreel", code: 3, userInfo: [NSLocalizedDescriptionKey: "Couldn't save a screenshot. Check the save folder."])
                 }
                 lastSaved = now; problem = nil
             } catch {

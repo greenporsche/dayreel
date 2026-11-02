@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/images/icon.png" width="128" alt="InstantShot app icon: a white ring around a red dot">
+  <img src="docs/images/icon.png" width="128" alt="Dayreel app icon: a white ring around a red dot">
 </p>
 
-<h1 align="center">InstantShot</h1>
+<h1 align="center">Dayreel</h1>
 
 <p align="center">
   A tiny macOS menu-bar app that quietly saves a screenshot of your whole desktop every few seconds,<br>
@@ -16,7 +16,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-dark.png">
-    <img src="docs/images/settings-light.png" width="480" alt="InstantShot Settings: save folder, JPEG quality slider, capture interval and display choice">
+    <img src="docs/images/settings-light.png" width="480" alt="Dayreel Settings: save folder, JPEG quality slider, capture interval and display choice">
   </picture>
 </p>
 
@@ -45,9 +45,9 @@
 
 ```sh
 git clone <this repo>
-cd instantshot
+cd dayreel
 ./build.sh
-open build/InstantShot.app
+open build/Dayreel.app
 ```
 
 On first Start, macOS asks for **Screen Recording** permission
@@ -62,7 +62,7 @@ code-signing certificate once and tell the build to use it:
 1. Keychain Access › Certificate Assistant › Create a Certificate…
    Name it (for example `My Code Signing`), Identity Type **Self-Signed Root**, Certificate Type **Code Signing**.
 2. Put that name in a file called `.signing-identity` next to `build.sh` (it's git-ignored),
-   or set `INSTANTSHOT_SIGN_IDENTITY` in your environment.
+   or set `DAYREEL_SIGN_IDENTITY` in your environment.
 3. Run `./build.sh` in Terminal and click **Always Allow** when macOS asks to use the key.
 
 ## Using it
@@ -72,7 +72,7 @@ code-signing certificate once and tell the build to use it:
 | Start / Stop Capture `⌘S` | Toggles capturing. The subtitle shows when the last screenshot was saved. |
 | Show in Finder | Opens your save folder. |
 | Settings… `⌘,` | Save folder, JPEG quality, interval, and which displays to capture. Changes apply instantly. |
-| Quit InstantShot `⌘Q` | Quits. |
+| Quit Dayreel `⌘Q` | Quits. |
 
 **Disk use:** at 30-second intervals that's about 2,880 images a day. In one measured setup (two displays
 stitched to 9984×3456, quality 60) images averaged about 2.7 MB, or several GB per day; actual size depends on
