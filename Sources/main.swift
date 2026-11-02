@@ -212,8 +212,13 @@ final class App: NSObject, NSApplicationDelegate {
     @objc func toggle() {
         if let t = timer { t.invalidate(); timer = nil; refresh(); return }
         guard chooseFolderIfNeeded() else { return }
-        if !CGPreflightScreenCaptureAccess() { CGRequestScreenCaptureAccess() }
         problem = nil
+        if !CGPreflightScreenCaptureAccess() {
+            CGRequestScreenCaptureAccess()   // one system prompt per Start press
+            problem = "Needs Screen Recording access (System Settings › Privacy & Security). Press Start after allowing."
+            refresh()
+            return
+        }
         schedule()
         capture()
     }
@@ -226,6 +231,13 @@ final class App: NSObject, NSApplicationDelegate {
     func capture() {
         // One settings snapshot per cycle.
         guard let folder = Prefs.folder else { return }
+        // Without access, don't touch ScreenCaptureKit: every call would re-raise the system prompt.
+        guard CGPreflightScreenCaptureAccess() else {
+            timer?.invalidate(); timer = nil
+            problem = "Needs Screen Recording access (System Settings › Privacy & Security). Press Start after allowing."
+            refresh()
+            return
+        }
         let quality = Double(Prefs.quality) / 100.0
         let all = Prefs.allDisplays
         Task { @MainActor in
