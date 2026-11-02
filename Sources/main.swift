@@ -30,6 +30,7 @@ enum Prefs {
 final class SettingsWindow: NSObject {
     let window: NSWindow
     let folderLabel = NSTextField(labelWithString: "")
+    let pathLabel = NSTextField(labelWithString: "")
     let qualityField = NSTextField()
     let qualityStepper = NSStepper()
     let intervalField = NSTextField()
@@ -38,16 +39,25 @@ final class SettingsWindow: NSObject {
     var onChange: () -> Void = {}
 
     override init() {
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 460, height: 190),
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 230),
                           styleMask: [.titled, .closable], backing: .buffered, defer: false)
         super.init()
-        window.title = "InstantShot Settings"
+        window.title = "Settings"
         window.isReleasedWhenClosed = false
 
         folderLabel.lineBreakMode = .byTruncatingMiddle
+        folderLabel.font = .systemFont(ofSize: 13, weight: .medium)
         folderLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        folderLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        pathLabel.lineBreakMode = .byTruncatingMiddle
+        pathLabel.font = .systemFont(ofSize: 11)
+        pathLabel.textColor = .secondaryLabelColor
+        pathLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let names = NSStackView(views: [folderLabel, pathLabel]); names.orientation = .vertical
+        names.alignment = .leading; names.spacing = 2
         let choose = NSButton(title: "Choose…", target: self, action: #selector(chooseFolder))
-        let folderRow = NSStackView(views: [folderLabel, choose]); folderRow.spacing = 8
+        let folderRow = NSStackView(views: [names, choose]); folderRow.spacing = 12
+        folderRow.alignment = .centerY
 
         configure(qualityField, qualityStepper, min: 1, max: 100, action: #selector(qualityChanged))
         configure(intervalField, intervalStepper, min: 1, max: 86400, action: #selector(intervalChanged))
@@ -60,19 +70,21 @@ final class SettingsWindow: NSObject {
         let grid = NSGridView(views: [
             [label("Save to"), folderRow],
             [label("JPEG quality"), q],
-            [label("Interval"), i],
+            [label("Every"), i],
             [label("Capture"), displays],
         ])
         grid.column(at: 0).xPlacement = .trailing
-        grid.rowSpacing = 12; grid.columnSpacing = 10
+        grid.column(at: 1).xPlacement = .leading
+        grid.rowAlignment = .firstBaseline
+        grid.rowSpacing = 16; grid.columnSpacing = 14
         grid.translatesAutoresizingMaskIntoConstraints = false
         let content = window.contentView!
         content.addSubview(grid)
         NSLayoutConstraint.activate([
-            grid.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
-            grid.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
-            grid.topAnchor.constraint(equalTo: content.topAnchor, constant: 20),
-            grid.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -20),
+            grid.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 28),
+            grid.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -28),
+            grid.topAnchor.constraint(equalTo: content.topAnchor, constant: 28),
+            grid.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -28),
         ])
     }
 
@@ -87,11 +99,12 @@ final class SettingsWindow: NSObject {
     }
 
     func show() {
-        folderLabel.stringValue = Prefs.folder?.path ?? "Not chosen"
+        showFolder()
         qualityField.integerValue = Prefs.quality; qualityStepper.integerValue = Prefs.quality
         intervalField.integerValue = Prefs.interval; intervalStepper.integerValue = Prefs.interval
         displays.selectItem(at: Prefs.allDisplays ? 0 : 1)
         NSApp.activate(ignoringOtherApps: true)
+        window.makeFirstResponder(nil)
         window.center()
         window.makeKeyAndOrderFront(nil)
     }
@@ -99,7 +112,11 @@ final class SettingsWindow: NSObject {
     @objc func chooseFolder() {
         let p = NSOpenPanel()
         p.canChooseDirectories = true; p.canChooseFiles = false; p.canCreateDirectories = true
-        if p.runModal() == .OK, let u = p.url { Prefs.folder = u; folderLabel.stringValue = u.path; onChange() }
+        if p.runModal() == .OK, let u = p.url { Prefs.folder = u; showFolder(); onChange() }
+    }
+    func showFolder() {
+        folderLabel.stringValue = Prefs.folder?.lastPathComponent ?? "Not chosen"
+        pathLabel.stringValue = Prefs.folder?.deletingLastPathComponent().path ?? ""
     }
     @objc func qualityChanged(_ s: Any) {
         let v = (s as? NSStepper)?.integerValue ?? qualityField.integerValue
