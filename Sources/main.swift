@@ -168,17 +168,7 @@ final class App: NSObject, NSApplicationDelegate {
 
     func refresh() {
         let on = timer != nil
-        let cfg = NSImage.SymbolConfiguration(pointSize: 15, weight: .regular)
-        if on {
-            let red = cfg.applying(.init(paletteColors: [.systemRed]))
-            let img = NSImage(systemSymbolName: "record.circle.fill", accessibilityDescription: nil)?.withSymbolConfiguration(red)
-            img?.isTemplate = false
-            item.button?.image = img
-        } else {
-            let img = NSImage(systemSymbolName: "record.circle", accessibilityDescription: nil)?.withSymbolConfiguration(cfg)
-            img?.isTemplate = true
-            item.button?.image = img
-        }
+        item.button?.image = Self.indicator(recording: on)
         toggleItem.title = on ? "Stop" : "Start"
 
         var status: String
@@ -190,6 +180,23 @@ final class App: NSObject, NSApplicationDelegate {
         statusLine.title = status
         item.button?.toolTip = "InstantShot — " + status
         item.button?.setAccessibilityValue(status)
+    }
+
+    /// Same ring in both states; the inside fills red while capturing.
+    static func indicator(recording: Bool) -> NSImage {
+        let img = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { r in
+            let ring = NSBezierPath(ovalIn: r.insetBy(dx: 2.5, dy: 2.5))
+            ring.lineWidth = 1.6
+            NSColor.labelColor.setStroke()
+            ring.stroke()
+            if recording {
+                NSColor.systemRed.setFill()
+                NSBezierPath(ovalIn: r.insetBy(dx: 5.5, dy: 5.5)).fill()
+            }
+            return true
+        }
+        img.isTemplate = false   // drawn with dynamic colors so it follows light/dark
+        return img
     }
 
     @objc func openSettings() { settings.show() }
