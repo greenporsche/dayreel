@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import ScreenCaptureKit
 import ImageIO
 import UniformTypeIdentifiers
@@ -25,179 +26,128 @@ enum Prefs {
     }
 }
 
-// MARK: - Settings window
+// MARK: - Settings window (SwiftUI grouped Form, the System Settings look)
 
-final class SettingsWindow: NSObject, NSWindowDelegate {
-    let window: NSWindow
-    let folderLabel = NSTextField(labelWithString: "")
-    let pathLabel = NSTextField(labelWithString: "")
-    let savedLabel = NSTextField(labelWithString: "")
-    var savedGeneration = 0
-    let qualityField = NSTextField()
-    let qualityStepper = NSStepper()
-    let intervalField = NSTextField()
-    let intervalStepper = NSStepper()
-    let displays = NSPopUpButton()
+final class SettingsModel: ObservableObject {
+    @Published var folder: URL? = Prefs.folder
+    @Published var quality: Double = Double(Prefs.quality)
+    @Published var interval: Int = Prefs.interval
+    @Published var allDisplays: Bool = Prefs.allDisplays
+    @Published var showSaved = false
     var onChange: () -> Void = {}
+    private var savedToken = 0
+
+    func reload() {
+        folder = Prefs.folder; quality = Double(Prefs.quality)
+        interval = Prefs.interval; allDisplays = Prefs.allDisplays
+    }
+
+    func chooseFolder() {
+        let p = NSOpenPanel()
+        p.canChooseDirectories = true; p.canChooseFiles = false; p.canCreateDirectories = true
+        if p.runModal() == .OK, let u = p.url { Prefs.folder = u; folder = u; changed() }
+    }
+
+    /// Called after any value was stored: apply live and flash "Saved".
+    func changed() {
+        onChange()
+        savedToken += 1
+        let t = savedToken
+        withAnimation(.easeOut(duration: 0.15)) { showSaved = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            guard let self, self.savedToken == t else { return }
+            withAnimation(.easeOut(duration: 0.4)) { self.showSaved = false }
+        }
+    }
+}
+
+struct SettingsView: View {
+    @ObservedObject var m: SettingsModel
+    static let intervals: [(Int, String)] = [
+        (5, "5 seconds"), (10, "10 seconds"), (30, "30 seconds"), (60, "1 minute"),
+        (120, "2 minutes"), (300, "5 minutes"), (600, "10 minutes"), (1800, "30 minutes"), (3600, "1 hour"),
+    ]
+    var options: [(Int, String)] {
+        Self.intervals.contains { $0.0 == m.interval } ? Self.intervals : Self.intervals + [(m.interval, "\(m.interval) seconds")]
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                LabeledContent("Save to") {
+                    HStack(spacing: 10) {
+                        VStack(alignment: .trailing, spacing: 1) {
+                            Text(m.folder?.lastPathComponent ?? "Not chosen").foregroundStyle(.primary)
+                            if let parent = m.folder?.deletingLastPathComponent().path {
+                                Text(parent).font(.caption).foregroundStyle(.secondary)
+                                    .lineLimit(1).truncationMode(.middle)
+                            }
+                        }
+                        Button("Choose…") { m.chooseFolder() }
+                    }
+                }
+            }
+            Section {
+                LabeledContent("JPEG quality") {
+                    HStack(spacing: 10) {
+                        Slider(value: $m.quality, in: 10...100, step: 5) { Text("JPEG quality") }
+                            .labelsHidden().frame(width: 170)
+                        Text("\(Int(m.quality))%").monospacedDigit().frame(width: 40, alignment: .trailing)
+                    }
+                }
+                Picker("Every", selection: $m.interval) {
+                    ForEach(options, id: \.0) { Text($0.1).tag($0.0) }
+                }
+            } footer: {
+                Text("Higher quality creates larger files.")
+            }
+            Section {
+                Picker("Capture", selection: $m.allDisplays) {
+                    Text("All displays").tag(true)
+                    Text("Primary display only").tag(false)
+                }
+            } footer: {
+                Text(m.allDisplays ? "All screens are combined into one image." : "Only the main display is saved.")
+            }
+        }
+        .formStyle(.grouped)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Text("✓ Saved").font(.callout).foregroundStyle(.secondary)
+                .opacity(m.showSaved ? 1 : 0)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.horizontal, 20).padding(.bottom, 10)
+                .accessibilityHidden(!m.showSaved)
+        }
+        .onChange(of: m.quality) { _, v in Prefs.quality = Int(v); m.changed() }
+        .onChange(of: m.interval) { _, v in Prefs.interval = v; m.changed() }
+        .onChange(of: m.allDisplays) { _, v in Prefs.allDisplays = v; m.changed() }
+    }
+}
+
+final class SettingsWindow: NSObject {
+    let model = SettingsModel()
+    let window: NSWindow
+    var onChange: () -> Void {
+        get { model.onChange }
+        set { model.onChange = newValue }
+    }
 
     override init() {
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 500, height: 380),
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 360),
                           styleMask: [.titled, .closable], backing: .buffered, defer: false)
         super.init()
         window.title = "Settings"
         window.isReleasedWhenClosed = false
-        window.delegate = self
-
-        folderLabel.lineBreakMode = .byTruncatingMiddle
-        folderLabel.font = .systemFont(ofSize: 13, weight: .medium)
-        folderLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        folderLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        pathLabel.lineBreakMode = .byTruncatingMiddle
-        pathLabel.font = .systemFont(ofSize: 11)
-        pathLabel.textColor = .secondaryLabelColor
-        pathLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        let names = NSStackView(views: [folderLabel, pathLabel]); names.orientation = .vertical
-        names.alignment = .leading; names.spacing = 2
-        let choose = NSButton(title: "Choose…", target: self, action: #selector(chooseFolder))
-        let folderRow = NSStackView(views: [names, choose]); folderRow.spacing = 12
-        folderRow.alignment = .centerY
-
-        configure(qualityField, qualityStepper, name: "JPEG quality, percent", min: 1, max: 100, action: #selector(qualityChanged))
-        configure(intervalField, intervalStepper, name: "Capture interval, seconds", min: 1, max: 86400, action: #selector(intervalChanged))
-        let q = NSStackView(views: [qualityField, qualityStepper, NSTextField(labelWithString: "%")]); q.spacing = 6
-        let i = NSStackView(views: [intervalField, intervalStepper, NSTextField(labelWithString: "seconds")]); i.spacing = 6
-
-        displays.addItems(withTitles: ["All displays", "Primary display only"])
-        displays.setAccessibilityLabel("Capture displays")
-        displays.target = self; displays.action = #selector(displaysChanged)
-
-        displaysHelp = helper("")
-        let blank = NSGridCell.emptyContentView
-        let grid = NSGridView(views: [
-            [label("Save to:"), folderRow],
-            [blank, NSView()],            // 1: separator
-            [label("JPEG quality:"), q],
-            [blank, helper("Higher quality creates larger files.")],
-            [label("Every:"), i],
-            [blank, helper("How often a screenshot is saved.")],
-            [blank, NSView()],            // 6: separator
-            [label("Capture:"), displays],
-            [blank, displaysHelp],
-            [blank, NSView()],            // 9: separator
-            [blank, bottomRow()],
-        ])
-        for r in [1, 6, 9] {
-            let box = NSBox(); box.boxType = .separator
-            grid.cell(atColumnIndex: 1, rowIndex: r).contentView = box
-            grid.row(at: r).mergeCells(in: NSRange(location: 0, length: 2))
-            grid.cell(atColumnIndex: 0, rowIndex: r).contentView = box
-            grid.cell(atColumnIndex: 0, rowIndex: r).xPlacement = .fill
-        }
-        grid.column(at: 0).xPlacement = .trailing
-        grid.column(at: 1).xPlacement = .leading
-        grid.rowAlignment = .firstBaseline
-        grid.rowSpacing = 10; grid.columnSpacing = 14
-        for r in [1, 6, 9] { grid.row(at: r).topPadding = 8; grid.row(at: r).bottomPadding = 8 }
-        for r in [2, 4] { grid.row(at: r).bottomPadding = 0 }
-        grid.translatesAutoresizingMaskIntoConstraints = false
-        let content = window.contentView!
-        content.addSubview(grid)
-        NSLayoutConstraint.activate([
-            grid.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 28),
-            grid.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -28),
-            grid.topAnchor.constraint(equalTo: content.topAnchor, constant: 28),
-            grid.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -28),
-        ])
-    }
-
-    var displaysHelp = NSTextField(labelWithString: "")
-
-    func helper(_ text: String) -> NSTextField {
-        let t = NSTextField(wrappingLabelWithString: text)
-        t.font = .systemFont(ofSize: 11)
-        t.textColor = .secondaryLabelColor
-        t.preferredMaxLayoutWidth = 300
-        return t
-    }
-
-    func updateDisplaysHelp() {
-        displaysHelp.stringValue = Prefs.allDisplays
-            ? "All screens are combined into one image."
-            : "Only the main display is saved."
-    }
-
-    func bottomRow() -> NSView {
-        savedLabel.font = .systemFont(ofSize: 12)
-        savedLabel.textColor = .secondaryLabelColor
-        savedLabel.alphaValue = 0
-        let done = NSButton(title: "Done", target: self, action: #selector(done))
-        done.keyEquivalent = "\r"
-        let spacer = NSView()
-        spacer.setContentHuggingPriority(.init(1), for: .horizontal)
-        let row = NSStackView(views: [savedLabel, spacer, done]); row.spacing = 8
-        return row
-    }
-
-    @objc func done() { window.close() }
-
-    /// Quiet confirmation that a change was stored.
-    func flashSaved() {
-        savedLabel.stringValue = "✓ Saved"
-        savedLabel.alphaValue = 1
-        savedGeneration += 1
-        let g = savedGeneration
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-            guard let self, self.savedGeneration == g else { return }
-            NSAnimationContext.runAnimationGroup { $0.duration = 0.4; self.savedLabel.animator().alphaValue = 0 }
-        }
-    }
-
-    func label(_ s: String) -> NSTextField { NSTextField(labelWithString: s) }
-
-    func configure(_ f: NSTextField, _ s: NSStepper, name: String, min: Double, max: Double, action: Selector) {
-        (f.cell as? NSTextFieldCell)?.sendsActionOnEndEditing = true   // commit on focus loss, not only Return
-        f.setAccessibilityLabel(name); s.setAccessibilityLabel(name)
-        f.alignment = .right
-        f.widthAnchor.constraint(equalToConstant: 56).isActive = true
-        f.target = self; f.action = action
-        s.minValue = min; s.maxValue = max; s.increment = 1; s.valueWraps = false
-        s.target = self; s.action = action
+        window.contentViewController = NSHostingController(rootView: SettingsView(m: model))
+        window.setContentSize(NSSize(width: 480, height: 360))
     }
 
     func show() {
-        showFolder()
-        qualityField.integerValue = Prefs.quality; qualityStepper.integerValue = Prefs.quality
-        intervalField.integerValue = Prefs.interval; intervalStepper.integerValue = Prefs.interval
-        displays.selectItem(at: Prefs.allDisplays ? 0 : 1)
-        updateDisplaysHelp()
+        model.reload()
         NSApp.activate(ignoringOtherApps: true)
-        window.makeFirstResponder(nil)
         window.center()
         window.makeKeyAndOrderFront(nil)
     }
-
-    func windowWillClose(_ n: Notification) { window.makeFirstResponder(nil) }   // ends editing, commits typed value
-
-    @objc func chooseFolder() {
-        let p = NSOpenPanel()
-        p.canChooseDirectories = true; p.canChooseFiles = false; p.canCreateDirectories = true
-        if p.runModal() == .OK, let u = p.url { Prefs.folder = u; showFolder(); onChange(); flashSaved() }
-    }
-    func showFolder() {
-        folderLabel.stringValue = Prefs.folder?.lastPathComponent ?? "Not chosen"
-        pathLabel.stringValue = Prefs.folder?.deletingLastPathComponent().path ?? ""
-    }
-    @objc func qualityChanged(_ s: Any) {
-        let v = (s as? NSStepper)?.integerValue ?? qualityField.integerValue
-        Prefs.quality = v
-        qualityField.integerValue = Prefs.quality; qualityStepper.integerValue = Prefs.quality; onChange(); flashSaved()
-    }
-    @objc func intervalChanged(_ s: Any) {
-        let v = (s as? NSStepper)?.integerValue ?? intervalField.integerValue
-        Prefs.interval = v
-        intervalField.integerValue = Prefs.interval; intervalStepper.integerValue = Prefs.interval; onChange(); flashSaved()
-    }
-    @objc func displaysChanged() { Prefs.allDisplays = displays.indexOfSelectedItem == 0; updateDisplaysHelp(); onChange(); flashSaved() }
 }
 
 // MARK: - App
