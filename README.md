@@ -56,7 +56,7 @@ On first Start, macOS asks for **Screen Recording** permission
 ### Optional: a stable signature
 
 By default the app is signed ad-hoc, which gives each build a new identity, so macOS may ask for
-Screen Recording permission again after every rebuild. To avoid that, create a self-signed
+Screen Recording permission again after every rebuild. To give rebuilds a consistent signing identity, create a self-signed
 code-signing certificate once and tell the build to use it:
 
 1. Keychain Access › Certificate Assistant › Create a Certificate…
@@ -74,8 +74,9 @@ code-signing certificate once and tell the build to use it:
 | Settings… `⌘,` | Save folder, JPEG quality, interval, and which displays to capture. Changes apply instantly. |
 | Quit InstantShot `⌘Q` | Quits. |
 
-**Disk use:** at 30-second intervals that's about 2,880 images a day. With two large displays at quality 60,
-each image is roughly 2.7 MB, so plan for several GB per day. Lower the quality or lengthen the interval to save space.
+**Disk use:** at 30-second intervals that's about 2,880 images a day. In one measured setup (two displays
+stitched to 9984×3456, quality 60) images averaged about 2.7 MB, or several GB per day; actual size depends on
+what's on screen. Lower the quality or lengthen the interval to save space.
 
 ## How it works
 
