@@ -344,7 +344,7 @@ final class App: NSObject, NSApplicationDelegate {
                 }
                 // One image per interval: several displays are stitched in their System Settings arrangement.
                 let final = shots.count == 1 ? shots[0].image : try Self.stitch(shots)
-                let url = dir.appendingPathComponent(String(format: "%@-%@%03d.jpg", day, time, 1))
+                let url = dir.appendingPathComponent("\(day)-\(time).jpg")
                 guard let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.jpeg.identifier as CFString, 1, nil) else {
                     throw NSError(domain: "InstantShot", code: 2, userInfo: [NSLocalizedDescriptionKey: "Can't write to the save folder"])
                 }
