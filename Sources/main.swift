@@ -187,7 +187,8 @@ final class App: NSObject, NSApplicationDelegate {
     }
 
     func settingsChanged() {
-        if timer != nil { schedule() }   // interval change replaces the timer; stopped stays stopped
+        // Only an interval change replaces the timer; quality/folder/display edits leave the clock running.
+        if let t = timer, t.timeInterval != TimeInterval(Prefs.interval) { schedule() }   // stopped stays stopped
         refresh()
     }
 
