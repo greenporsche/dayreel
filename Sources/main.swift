@@ -157,6 +157,7 @@ final class App: NSObject, NSApplicationDelegate {
     let menu = NSMenu()
     let toggleItem = NSMenuItem(title: "Start", action: #selector(toggle), keyEquivalent: "s")
     let statusLine = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    let savedLine = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     let settings = SettingsWindow()
     var timer: Timer?
     var lastSaved: Date?
@@ -177,8 +178,8 @@ final class App: NSObject, NSApplicationDelegate {
         let reveal = NSMenuItem(title: "Show Folder in Finder", action: #selector(revealFolder), keyEquivalent: "")
         let prefs = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         let quit = NSMenuItem(title: "Quit InstantShot", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        statusLine.isEnabled = false
-        [toggleItem, statusLine, .separator(), reveal, prefs, .separator(), quit].forEach { menu.addItem($0) }
+        statusLine.isEnabled = false; savedLine.isEnabled = false
+        [toggleItem, statusLine, savedLine, .separator(), reveal, prefs, .separator(), quit].forEach { menu.addItem($0) }
         [toggleItem, reveal, prefs].forEach { $0.target = self }
         item.menu = menu
         item.button?.setAccessibilityLabel("InstantShot")
@@ -197,20 +198,24 @@ final class App: NSObject, NSApplicationDelegate {
         item.button?.image = Self.indicator(recording: on)
         toggleItem.title = on ? "Stop" : "Start"
 
-        // Menu line stays short so the menu doesn't widen; the tooltip carries the detail.
-        var detail: String, short: String
+        // Two short menu lines (state, then last save) so the menu stays compact; the tooltip carries the detail.
+        var detail: String, state: String
+        var saved: String? = nil
         if let problem {
             detail = problem
-            short = problem.hasPrefix("Needs Screen Recording") ? "Needs Screen Recording access" : "Last capture failed"
+            state = problem.hasPrefix("Needs Screen Recording") ? "Needs Screen Recording access" : "Last capture failed"
         } else if on {
             detail = "Capturing every \(Prefs.interval) s"
-            short = "Capturing"
+            state = detail
             if let t = lastSaved {
                 let stamp = Self.time.string(from: t)
-                detail += " · last saved \(stamp)"; short += " · saved \(stamp)"
+                detail += " · last saved \(stamp)"
+                saved = "Last saved \(stamp)"
             }
-        } else { detail = "Stopped"; short = "Stopped" }
-        statusLine.title = short
+        } else { detail = "Stopped"; state = "Stopped" }
+        statusLine.title = state
+        savedLine.title = saved ?? ""
+        savedLine.isHidden = saved == nil
         item.button?.toolTip = "InstantShot — " + detail
         let status = detail
         item.button?.setAccessibilityValue(status)
