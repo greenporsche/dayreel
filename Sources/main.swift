@@ -276,6 +276,35 @@ final class App: NSObject, NSApplicationDelegate {
         timer = Timer.scheduledTimer(withTimeInterval: TimeInterval(Prefs.interval), repeats: true) { [weak self] _ in self?.capture() }
     }
 
+    /// Pure layout: canvas size in pixels and each display's pixel rect (origin bottom-left, as CGContext expects).
+    static func layout(_ frames: [(frame: CGRect, scale: Int)], maxSide: CGFloat = 16384) -> (size: CGSize, rects: [CGRect]) {
+        let union = frames.dropFirst().reduce(frames[0].frame) { $0.union($1.frame) }
+        var scale = CGFloat(frames.map { $0.scale }.max() ?? 1)
+        scale = min(scale, maxSide / max(union.width, union.height))   // keep the canvas bounded
+        let rects = frames.map { f in
+            CGRect(x: (f.frame.minX - union.minX) * scale,
+                   y: (union.maxY - f.frame.maxY) * scale,
+                   width: f.frame.width * scale, height: f.frame.height * scale)
+        }
+        return (CGSize(width: (union.width * scale).rounded(), height: (union.height * scale).rounded()), rects)
+    }
+
+    static func stitch(_ shots: [(frame: CGRect, scale: Int, image: CGImage)]) throws -> CGImage {
+        let l = layout(shots.map { ($0.frame, $0.scale) })
+        guard let ctx = CGContext(data: nil, width: Int(l.size.width), height: Int(l.size.height), bitsPerComponent: 8,
+                                  bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                  bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else {
+            throw NSError(domain: "InstantShot", code: 4, userInfo: [NSLocalizedDescriptionKey: "Couldn't combine displays"])
+        }
+        ctx.setFillColor(CGColor(gray: 0, alpha: 1)); ctx.fill(CGRect(origin: .zero, size: l.size))
+        ctx.interpolationQuality = .high
+        for (shot, r) in zip(shots, l.rects) { ctx.draw(shot.image, in: r) }
+        guard let out = ctx.makeImage() else {
+            throw NSError(domain: "InstantShot", code: 4, userInfo: [NSLocalizedDescriptionKey: "Couldn't combine displays"])
+        }
+        return out
+    }
+
     func capture() {
         // One settings snapshot per cycle.
         guard let folder = Prefs.folder else { return }
@@ -303,7 +332,8 @@ final class App: NSObject, NSApplicationDelegate {
                 f.dateFormat = "HHmmss"; let time = f.string(from: now)
                 let dir = folder.appendingPathComponent(day)
                 try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-                for (i, d) in displays.enumerated() {
+                var shots: [(frame: CGRect, scale: Int, image: CGImage)] = []
+                for d in displays {
                     let filter = SCContentFilter(display: d, excludingWindows: [])
                     let cfg = SCStreamConfiguration()
                     let scale = Int(filter.pointPixelScale)
@@ -311,14 +341,17 @@ final class App: NSObject, NSApplicationDelegate {
                     cfg.height = Int(filter.contentRect.height) * scale
                     cfg.showsCursor = true
                     let img = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: cfg)
-                    let url = dir.appendingPathComponent(String(format: "%@-%@%03d.jpg", day, time, i + 1))
-                    guard let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.jpeg.identifier as CFString, 1, nil) else {
-                        throw NSError(domain: "InstantShot", code: 2, userInfo: [NSLocalizedDescriptionKey: "Can't write to the save folder"])
-                    }
-                    CGImageDestinationAddImage(dest, img, [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
-                    guard CGImageDestinationFinalize(dest) else {
-                        throw NSError(domain: "InstantShot", code: 3, userInfo: [NSLocalizedDescriptionKey: "Couldn't save a screenshot. Check the save folder."])
-                    }
+                    shots.append((d.frame, scale, img))
+                }
+                // One image per interval: several displays are stitched in their System Settings arrangement.
+                let final = shots.count == 1 ? shots[0].image : try Self.stitch(shots)
+                let url = dir.appendingPathComponent(String(format: "%@-%@%03d.jpg", day, time, 1))
+                guard let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.jpeg.identifier as CFString, 1, nil) else {
+                    throw NSError(domain: "InstantShot", code: 2, userInfo: [NSLocalizedDescriptionKey: "Can't write to the save folder"])
+                }
+                CGImageDestinationAddImage(dest, final, [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
+                guard CGImageDestinationFinalize(dest) else {
+                    throw NSError(domain: "InstantShot", code: 3, userInfo: [NSLocalizedDescriptionKey: "Couldn't save a screenshot. Check the save folder."])
                 }
                 lastSaved = now; problem = nil
             } catch {
