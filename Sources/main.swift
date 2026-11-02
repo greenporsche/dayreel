@@ -176,17 +176,6 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         window.makeKeyAndOrderFront(nil)
     }
 
-    func snapshot(to path: String) {
-        showFolder(); updateDisplaysHelp()
-        qualityField.integerValue = Prefs.quality; qualityStepper.integerValue = Prefs.quality
-        intervalField.integerValue = Prefs.interval; intervalStepper.integerValue = Prefs.interval
-        displays.selectItem(at: Prefs.allDisplays ? 0 : 1)
-        let v = window.contentView!
-        v.layoutSubtreeIfNeeded()
-        window.appearance = NSAppearance(named: .aqua)
-        try? v.dataWithPDF(inside: v.bounds).write(to: URL(fileURLWithPath: path))   // PDF: renders controls offscreen
-    }
-
     func windowWillClose(_ n: Notification) { window.makeFirstResponder(nil) }   // ends editing, commits typed value
 
     @objc func chooseFolder() {
@@ -245,10 +234,6 @@ final class App: NSObject, NSApplicationDelegate {
         item.button?.setAccessibilityLabel("InstantShot")
         settings.onChange = { [weak self] in self?.settingsChanged() }
         refresh()
-        // Dev aid: `InstantShot --snapshot-settings out.pdf` renders the Settings view to a PDF and exits.
-        if let i = CommandLine.arguments.firstIndex(of: "--snapshot-settings"), i + 1 < CommandLine.arguments.count {
-            settings.snapshot(to: CommandLine.arguments[i + 1]); exit(0)
-        }
     }
 
     func settingsChanged() {
