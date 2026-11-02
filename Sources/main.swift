@@ -197,14 +197,22 @@ final class App: NSObject, NSApplicationDelegate {
         item.button?.image = Self.indicator(recording: on)
         toggleItem.title = on ? "Stop" : "Start"
 
-        var status: String
-        if let problem { status = problem }
-        else if on {
-            status = "Capturing every \(Prefs.interval) s"
-            if let t = lastSaved { status += " · last saved \(Self.time.string(from: t))" }
-        } else { status = "Stopped" }
-        statusLine.title = status
-        item.button?.toolTip = "InstantShot — " + status
+        // Menu line stays short so the menu doesn't widen; the tooltip carries the detail.
+        var detail: String, short: String
+        if let problem {
+            detail = problem
+            short = problem.hasPrefix("Needs Screen Recording") ? "Needs Screen Recording access" : "Last capture failed"
+        } else if on {
+            detail = "Capturing every \(Prefs.interval) s"
+            short = "Capturing"
+            if let t = lastSaved {
+                let stamp = Self.time.string(from: t)
+                detail += " · last saved \(stamp)"; short += " · saved \(stamp)"
+            }
+        } else { detail = "Stopped"; short = "Stopped" }
+        statusLine.title = short
+        item.button?.toolTip = "InstantShot — " + detail
+        let status = detail
         item.button?.setAccessibilityValue(status)
     }
 
