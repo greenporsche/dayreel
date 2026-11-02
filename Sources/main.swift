@@ -3,6 +3,7 @@ import SwiftUI
 import ScreenCaptureKit
 import ImageIO
 import UniformTypeIdentifiers
+import ServiceManagement
 
 // MARK: - Settings (UserDefaults-backed)
 
@@ -34,12 +35,21 @@ final class SettingsModel: ObservableObject {
     @Published var interval: Int = Prefs.interval
     @Published var allDisplays: Bool = Prefs.allDisplays
     @Published var showSaved = false
+    @Published var login: SMAppService.Status = SMAppService.mainApp.status
     var onChange: () -> Void = {}
     private var savedToken = 0
 
     func reload() {
         folder = Prefs.folder; quality = Double(Prefs.quality)
         interval = Prefs.interval; allDisplays = Prefs.allDisplays
+        login = SMAppService.mainApp.status
+    }
+
+    /// The switch reflects the real login-item state; only a user flip registers or unregisters.
+    func setOpenAtLogin(_ on: Bool) {
+        if on { try? SMAppService.mainApp.register() } else { try? SMAppService.mainApp.unregister() }
+        login = SMAppService.mainApp.status
+        changed()
     }
 
     func chooseFolder() {
@@ -109,8 +119,25 @@ struct SettingsView: View {
             } footer: {
                 Text(m.allDisplays ? "All screens are combined into one image." : "Only the main display is saved.")
             }
+            Section {
+                Toggle("Open at login", isOn: Binding(
+                    get: { m.login == .enabled || m.login == .requiresApproval },
+                    set: { m.setOpenAtLogin($0) }))
+            } footer: {
+                if m.login == .requiresApproval {
+                    HStack {
+                        Text("Allow Dayreel in Login Items to finish turning this on.")
+                        Button("Open Login Items") { SMAppService.openSystemSettingsLoginItems() }
+                    }
+                } else {
+                    Text("Dayreel opens when you log in and starts capturing.")
+                }
+            }
         }
         .formStyle(.grouped)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            m.login = SMAppService.mainApp.status
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             Text("✓ Saved").font(.callout).foregroundStyle(.secondary)
                 .opacity(m.showSaved ? 1 : 0)
@@ -133,13 +160,13 @@ final class SettingsWindow: NSObject {
     }
 
     override init() {
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 360),
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 440),
                           styleMask: [.titled, .closable], backing: .buffered, defer: false)
         super.init()
         window.title = "Dayreel Settings"
         window.isReleasedWhenClosed = false
         window.contentViewController = NSHostingController(rootView: SettingsView(m: model))
-        window.setContentSize(NSSize(width: 480, height: 360))
+        window.setContentSize(NSSize(width: 480, height: 440))
     }
 
     func show() {
