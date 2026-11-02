@@ -45,7 +45,7 @@
 
 ```sh
 git clone <this repo>
-cd dayreel
+cd Dayreel
 ./build.sh
 open build/Dayreel.app
 ```
