@@ -190,6 +190,8 @@ final class App: NSObject, NSApplicationDelegate {
         item.button?.setAccessibilityLabel("InstantShot")
         settings.onChange = { [weak self] in self?.settingsChanged() }
         refresh()
+        // Once a save folder is set up, launching the app starts capturing right away.
+        if Prefs.folder != nil { toggle() }
     }
 
     func settingsChanged() {
