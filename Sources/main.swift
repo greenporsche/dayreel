@@ -31,6 +31,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     let window: NSWindow
     let folderLabel = NSTextField(labelWithString: "")
     let pathLabel = NSTextField(labelWithString: "")
+    let savedLabel = NSTextField(labelWithString: "")
+    var savedGeneration = 0
     let qualityField = NSTextField()
     let qualityStepper = NSStepper()
     let intervalField = NSTextField()
@@ -39,7 +41,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     var onChange: () -> Void = {}
 
     override init() {
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 230),
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 270),
                           styleMask: [.titled, .closable], backing: .buffered, defer: false)
         super.init()
         window.title = "Settings"
@@ -74,6 +76,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             [label("JPEG quality"), q],
             [label("Every"), i],
             [label("Capture"), displays],
+            [NSGridCell.emptyContentView, bottomRow()],
         ])
         grid.column(at: 0).xPlacement = .trailing
         grid.column(at: 1).xPlacement = .leading
@@ -88,6 +91,32 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             grid.topAnchor.constraint(equalTo: content.topAnchor, constant: 28),
             grid.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -28),
         ])
+    }
+
+    func bottomRow() -> NSView {
+        savedLabel.font = .systemFont(ofSize: 12)
+        savedLabel.textColor = .secondaryLabelColor
+        savedLabel.alphaValue = 0
+        let done = NSButton(title: "Done", target: self, action: #selector(done))
+        done.keyEquivalent = "\r"
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.init(1), for: .horizontal)
+        let row = NSStackView(views: [savedLabel, spacer, done]); row.spacing = 8
+        return row
+    }
+
+    @objc func done() { window.close() }
+
+    /// Quiet confirmation that a change was stored.
+    func flashSaved() {
+        savedLabel.stringValue = "✓ Saved"
+        savedLabel.alphaValue = 1
+        savedGeneration += 1
+        let g = savedGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            guard let self, self.savedGeneration == g else { return }
+            NSAnimationContext.runAnimationGroup { $0.duration = 0.4; self.savedLabel.animator().alphaValue = 0 }
+        }
     }
 
     func label(_ s: String) -> NSTextField { NSTextField(labelWithString: s) }
@@ -118,7 +147,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     @objc func chooseFolder() {
         let p = NSOpenPanel()
         p.canChooseDirectories = true; p.canChooseFiles = false; p.canCreateDirectories = true
-        if p.runModal() == .OK, let u = p.url { Prefs.folder = u; showFolder(); onChange() }
+        if p.runModal() == .OK, let u = p.url { Prefs.folder = u; showFolder(); onChange(); flashSaved() }
     }
     func showFolder() {
         folderLabel.stringValue = Prefs.folder?.lastPathComponent ?? "Not chosen"
@@ -127,14 +156,14 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     @objc func qualityChanged(_ s: Any) {
         let v = (s as? NSStepper)?.integerValue ?? qualityField.integerValue
         Prefs.quality = v
-        qualityField.integerValue = Prefs.quality; qualityStepper.integerValue = Prefs.quality; onChange()
+        qualityField.integerValue = Prefs.quality; qualityStepper.integerValue = Prefs.quality; onChange(); flashSaved()
     }
     @objc func intervalChanged(_ s: Any) {
         let v = (s as? NSStepper)?.integerValue ?? intervalField.integerValue
         Prefs.interval = v
-        intervalField.integerValue = Prefs.interval; intervalStepper.integerValue = Prefs.interval; onChange()
+        intervalField.integerValue = Prefs.interval; intervalStepper.integerValue = Prefs.interval; onChange(); flashSaved()
     }
-    @objc func displaysChanged() { Prefs.allDisplays = displays.indexOfSelectedItem == 0; onChange() }
+    @objc func displaysChanged() { Prefs.allDisplays = displays.indexOfSelectedItem == 0; onChange(); flashSaved() }
 }
 
 // MARK: - App
