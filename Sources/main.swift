@@ -41,7 +41,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     var onChange: () -> Void = {}
 
     override init() {
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 270),
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 500, height: 380),
                           styleMask: [.titled, .closable], backing: .buffered, defer: false)
         super.init()
         window.title = "Settings"
@@ -71,17 +71,34 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         displays.setAccessibilityLabel("Capture displays")
         displays.target = self; displays.action = #selector(displaysChanged)
 
+        displaysHelp = helper("")
+        let blank = NSGridCell.emptyContentView
         let grid = NSGridView(views: [
-            [label("Save to"), folderRow],
-            [label("JPEG quality"), q],
-            [label("Every"), i],
-            [label("Capture"), displays],
-            [NSGridCell.emptyContentView, bottomRow()],
+            [label("Save to:"), folderRow],
+            [blank, NSView()],            // 1: separator
+            [label("JPEG quality:"), q],
+            [blank, helper("Higher quality creates larger files.")],
+            [label("Every:"), i],
+            [blank, helper("How often a screenshot is saved.")],
+            [blank, NSView()],            // 6: separator
+            [label("Capture:"), displays],
+            [blank, displaysHelp],
+            [blank, NSView()],            // 9: separator
+            [blank, bottomRow()],
         ])
+        for r in [1, 6, 9] {
+            let box = NSBox(); box.boxType = .separator
+            grid.cell(atColumnIndex: 1, rowIndex: r).contentView = box
+            grid.row(at: r).mergeCells(in: NSRange(location: 0, length: 2))
+            grid.cell(atColumnIndex: 0, rowIndex: r).contentView = box
+            grid.cell(atColumnIndex: 0, rowIndex: r).xPlacement = .fill
+        }
         grid.column(at: 0).xPlacement = .trailing
         grid.column(at: 1).xPlacement = .leading
         grid.rowAlignment = .firstBaseline
-        grid.rowSpacing = 16; grid.columnSpacing = 14
+        grid.rowSpacing = 10; grid.columnSpacing = 14
+        for r in [1, 6, 9] { grid.row(at: r).topPadding = 8; grid.row(at: r).bottomPadding = 8 }
+        for r in [2, 4] { grid.row(at: r).bottomPadding = 0 }
         grid.translatesAutoresizingMaskIntoConstraints = false
         let content = window.contentView!
         content.addSubview(grid)
@@ -91,6 +108,22 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             grid.topAnchor.constraint(equalTo: content.topAnchor, constant: 28),
             grid.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -28),
         ])
+    }
+
+    var displaysHelp = NSTextField(labelWithString: "")
+
+    func helper(_ text: String) -> NSTextField {
+        let t = NSTextField(wrappingLabelWithString: text)
+        t.font = .systemFont(ofSize: 11)
+        t.textColor = .secondaryLabelColor
+        t.preferredMaxLayoutWidth = 300
+        return t
+    }
+
+    func updateDisplaysHelp() {
+        displaysHelp.stringValue = Prefs.allDisplays
+            ? "All screens are combined into one image."
+            : "Only the main display is saved."
     }
 
     func bottomRow() -> NSView {
@@ -136,10 +169,22 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         qualityField.integerValue = Prefs.quality; qualityStepper.integerValue = Prefs.quality
         intervalField.integerValue = Prefs.interval; intervalStepper.integerValue = Prefs.interval
         displays.selectItem(at: Prefs.allDisplays ? 0 : 1)
+        updateDisplaysHelp()
         NSApp.activate(ignoringOtherApps: true)
         window.makeFirstResponder(nil)
         window.center()
         window.makeKeyAndOrderFront(nil)
+    }
+
+    func snapshot(to path: String) {
+        showFolder(); updateDisplaysHelp()
+        qualityField.integerValue = Prefs.quality; qualityStepper.integerValue = Prefs.quality
+        intervalField.integerValue = Prefs.interval; intervalStepper.integerValue = Prefs.interval
+        displays.selectItem(at: Prefs.allDisplays ? 0 : 1)
+        let v = window.contentView!
+        v.layoutSubtreeIfNeeded()
+        window.appearance = NSAppearance(named: .aqua)
+        try? v.dataWithPDF(inside: v.bounds).write(to: URL(fileURLWithPath: path))   // PDF: renders controls offscreen
     }
 
     func windowWillClose(_ n: Notification) { window.makeFirstResponder(nil) }   // ends editing, commits typed value
@@ -163,7 +208,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         Prefs.interval = v
         intervalField.integerValue = Prefs.interval; intervalStepper.integerValue = Prefs.interval; onChange(); flashSaved()
     }
-    @objc func displaysChanged() { Prefs.allDisplays = displays.indexOfSelectedItem == 0; onChange(); flashSaved() }
+    @objc func displaysChanged() { Prefs.allDisplays = displays.indexOfSelectedItem == 0; updateDisplaysHelp(); onChange(); flashSaved() }
 }
 
 // MARK: - App
@@ -200,6 +245,10 @@ final class App: NSObject, NSApplicationDelegate {
         item.button?.setAccessibilityLabel("InstantShot")
         settings.onChange = { [weak self] in self?.settingsChanged() }
         refresh()
+        // Dev aid: `InstantShot --snapshot-settings out.pdf` renders the Settings view to a PDF and exits.
+        if let i = CommandLine.arguments.firstIndex(of: "--snapshot-settings"), i + 1 < CommandLine.arguments.count {
+            settings.snapshot(to: CommandLine.arguments[i + 1]); exit(0)
+        }
     }
 
     func settingsChanged() {
