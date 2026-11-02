@@ -277,10 +277,9 @@ final class App: NSObject, NSApplicationDelegate {
     }
 
     /// Pure layout: canvas size in pixels and each display's pixel rect (origin bottom-left, as CGContext expects).
-    static func layout(_ frames: [(frame: CGRect, scale: Int)], maxSide: CGFloat = 16384) -> (size: CGSize, rects: [CGRect]) {
+    static func layout(_ frames: [(frame: CGRect, scale: Int)]) -> (size: CGSize, rects: [CGRect]) {
         let union = frames.dropFirst().reduce(frames[0].frame) { $0.union($1.frame) }
-        var scale = CGFloat(frames.map { $0.scale }.max() ?? 1)
-        scale = min(scale, maxSide / max(union.width, union.height))   // keep the canvas bounded
+        let scale = CGFloat(frames.map { $0.scale }.max() ?? 1)
         let rects = frames.map { f in
             CGRect(x: (f.frame.minX - union.minX) * scale,
                    y: (union.maxY - f.frame.maxY) * scale,
