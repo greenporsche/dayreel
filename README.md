@@ -11,8 +11,6 @@
 
 ---
 
-<!-- Screenshot placeholders: menu + stitched demo capture are added before publishing. -->
-
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-dark.png">
