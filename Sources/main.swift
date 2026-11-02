@@ -155,9 +155,8 @@ final class SettingsWindow: NSObject {
 final class App: NSObject, NSApplicationDelegate {
     let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     let menu = NSMenu()
-    let toggleItem = NSMenuItem(title: "Start", action: #selector(toggle), keyEquivalent: "s")
-    let statusLine = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-    let savedLine = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    let toggleItem = NSMenuItem(title: "Start Capture", action: #selector(toggle), keyEquivalent: "s")
+    let revealItem = NSMenuItem(title: "Show in Finder", action: #selector(revealFolder), keyEquivalent: "")
     let settings = SettingsWindow()
     var timer: Timer?
     var lastSaved: Date?
@@ -166,6 +165,14 @@ final class App: NSObject, NSApplicationDelegate {
     static let time: DateFormatter = {
         let f = DateFormatter(); f.timeStyle = .medium; f.dateStyle = .none; return f
     }()
+    static let shortTime: DateFormatter = {
+        let f = DateFormatter(); f.timeStyle = .short; f.dateStyle = .none; return f
+    }()
+
+    /// Native menu-item subtitle (macOS 14.4+); older systems rely on the status-item tooltip.
+    static func setSubtitle(_ item: NSMenuItem, _ text: String?) {
+        if #available(macOS 14.4, *) { item.subtitle = text }
+    }
 
     func applicationDidFinishLaunching(_ n: Notification) {
         // Minimal app menu so Cmd-, and Cmd-Q work while the Settings window is key.
@@ -175,12 +182,10 @@ final class App: NSObject, NSApplicationDelegate {
         appMenu.addItem(s1)
         appMenu.addItem(NSMenuItem(title: "Quit InstantShot", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         NSApp.mainMenu = main
-        let reveal = NSMenuItem(title: "Show Folder in Finder", action: #selector(revealFolder), keyEquivalent: "")
         let prefs = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         let quit = NSMenuItem(title: "Quit InstantShot", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        statusLine.isEnabled = false; savedLine.isEnabled = false
-        [toggleItem, statusLine, savedLine, .separator(), reveal, prefs, .separator(), quit].forEach { menu.addItem($0) }
-        [toggleItem, reveal, prefs].forEach { $0.target = self }
+        [toggleItem, .separator(), revealItem, prefs, .separator(), quit].forEach { menu.addItem($0) }
+        [toggleItem, revealItem, prefs].forEach { $0.target = self }
         item.menu = menu
         item.button?.setAccessibilityLabel("InstantShot")
         settings.onChange = { [weak self] in self?.settingsChanged() }
@@ -196,29 +201,25 @@ final class App: NSObject, NSApplicationDelegate {
     func refresh() {
         let on = timer != nil
         item.button?.image = Self.indicator(recording: on)
-        toggleItem.title = on ? "Stop" : "Start"
+        toggleItem.title = on ? "Stop Capture" : "Start Capture"
 
-        // Two short menu lines (state, then last save) so the menu stays compact; the tooltip carries the detail.
-        var detail: String, state: String
-        var saved: String? = nil
+        // Short context lives as a subtitle on the action it belongs to; the tooltip carries the full detail.
+        var detail: String
+        var captureNote: String? = nil
         if let problem {
             detail = problem
-            state = problem.hasPrefix("Needs Screen Recording") ? "Needs Screen Recording access" : "Last capture failed"
+            captureNote = problem.hasPrefix("Needs Screen Recording") ? "Needs Screen Recording access" : "Last capture failed"
         } else if on {
             detail = "Capturing every \(Prefs.interval) s"
-            state = detail
             if let t = lastSaved {
-                let stamp = Self.time.string(from: t)
-                detail += " · last saved \(stamp)"
-                saved = "Last saved \(stamp)"
+                detail += " · last saved \(Self.time.string(from: t))"
+                captureNote = "Last saved \(Self.shortTime.string(from: t))"
             }
-        } else { detail = "Stopped"; state = "Stopped" }
-        statusLine.title = state
-        savedLine.title = saved ?? ""
-        savedLine.isHidden = saved == nil
+        } else { detail = "Stopped" }
+        Self.setSubtitle(toggleItem, captureNote)
+        Self.setSubtitle(revealItem, Prefs.folder?.lastPathComponent)
         item.button?.toolTip = "InstantShot — " + detail
-        let status = detail
-        item.button?.setAccessibilityValue(status)
+        item.button?.setAccessibilityValue(detail)
     }
 
     /// Same ring in both states; the inside fills red while capturing.
