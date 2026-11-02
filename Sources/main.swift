@@ -27,7 +27,7 @@ enum Prefs {
 
 // MARK: - Settings window
 
-final class SettingsWindow: NSObject {
+final class SettingsWindow: NSObject, NSWindowDelegate {
     let window: NSWindow
     let folderLabel = NSTextField(labelWithString: "")
     let pathLabel = NSTextField(labelWithString: "")
@@ -44,6 +44,7 @@ final class SettingsWindow: NSObject {
         super.init()
         window.title = "Settings"
         window.isReleasedWhenClosed = false
+        window.delegate = self
 
         folderLabel.lineBreakMode = .byTruncatingMiddle
         folderLabel.font = .systemFont(ofSize: 13, weight: .medium)
@@ -59,12 +60,13 @@ final class SettingsWindow: NSObject {
         let folderRow = NSStackView(views: [names, choose]); folderRow.spacing = 12
         folderRow.alignment = .centerY
 
-        configure(qualityField, qualityStepper, min: 1, max: 100, action: #selector(qualityChanged))
-        configure(intervalField, intervalStepper, min: 1, max: 86400, action: #selector(intervalChanged))
+        configure(qualityField, qualityStepper, name: "JPEG quality, percent", min: 1, max: 100, action: #selector(qualityChanged))
+        configure(intervalField, intervalStepper, name: "Capture interval, seconds", min: 1, max: 86400, action: #selector(intervalChanged))
         let q = NSStackView(views: [qualityField, qualityStepper, NSTextField(labelWithString: "%")]); q.spacing = 6
         let i = NSStackView(views: [intervalField, intervalStepper, NSTextField(labelWithString: "seconds")]); i.spacing = 6
 
         displays.addItems(withTitles: ["All displays", "Primary display only"])
+        displays.setAccessibilityLabel("Capture displays")
         displays.target = self; displays.action = #selector(displaysChanged)
 
         let grid = NSGridView(views: [
@@ -90,7 +92,9 @@ final class SettingsWindow: NSObject {
 
     func label(_ s: String) -> NSTextField { NSTextField(labelWithString: s) }
 
-    func configure(_ f: NSTextField, _ s: NSStepper, min: Double, max: Double, action: Selector) {
+    func configure(_ f: NSTextField, _ s: NSStepper, name: String, min: Double, max: Double, action: Selector) {
+        (f.cell as? NSTextFieldCell)?.sendsActionOnEndEditing = true   // commit on focus loss, not only Return
+        f.setAccessibilityLabel(name); s.setAccessibilityLabel(name)
         f.alignment = .right
         f.widthAnchor.constraint(equalToConstant: 56).isActive = true
         f.target = self; f.action = action
@@ -108,6 +112,8 @@ final class SettingsWindow: NSObject {
         window.center()
         window.makeKeyAndOrderFront(nil)
     }
+
+    func windowWillClose(_ n: Notification) { window.makeFirstResponder(nil) }   // ends editing, commits typed value
 
     @objc func chooseFolder() {
         let p = NSOpenPanel()
@@ -148,7 +154,13 @@ final class App: NSObject, NSApplicationDelegate {
     }()
 
     func applicationDidFinishLaunching(_ n: Notification) {
-        NSApp.mainMenu = NSMenu()   // lets Cmd-, work in the Settings window
+        // Minimal app menu so Cmd-, and Cmd-Q work while the Settings window is key.
+        let main = NSMenu(), appMenu = NSMenu()
+        let appItem = NSMenuItem(); appItem.submenu = appMenu; main.addItem(appItem)
+        let s1 = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ","); s1.target = self
+        appMenu.addItem(s1)
+        appMenu.addItem(NSMenuItem(title: "Quit InstantShot", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        NSApp.mainMenu = main
         let reveal = NSMenuItem(title: "Show Folder in Finder", action: #selector(revealFolder), keyEquivalent: "")
         let prefs = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         let quit = NSMenuItem(title: "Quit InstantShot", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
