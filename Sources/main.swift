@@ -136,7 +136,7 @@ final class SettingsWindow: NSObject {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 360),
                           styleMask: [.titled, .closable], backing: .buffered, defer: false)
         super.init()
-        window.title = "Settings"
+        window.title = "InstantShot Settings"
         window.isReleasedWhenClosed = false
         window.contentViewController = NSHostingController(rootView: SettingsView(m: model))
         window.setContentSize(NSSize(width: 480, height: 360))
